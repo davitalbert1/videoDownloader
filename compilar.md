@@ -74,28 +74,30 @@ cmake -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release ..
 cmake --build . --config Release
 ```
 
+O executável será gerado automaticamente na raiz do projeto (`VideoDownloader.exe`), fora da pasta `build`.
+
 ---
 
 ## 4. Como Executar
 
-O executável gerado será: `build/VideoDownloader.exe` (ou `./VideoDownloader.exe` ao entrar na pasta `build`).
+O executável gerado será: `VideoDownloader.exe` na raiz do projeto (fora da pasta `build`).
 
 ### 1. Interface Gráfica (GUI)
 Para abrir a interface gráfica com o reprodutor de vídeo e controles:
 ```bash
-./build/VideoDownloader.exe
+./VideoDownloader.exe
 ```
 ou
 ```bash
-./build/VideoDownloader.exe --gui
+./VideoDownloader.exe --gui
 ```
 
 #### Recursos da GUI:
-- **Download por URL direta**: Digite o link do vídeo no campo de texto e clique em **Baixar URL**.
-- **Download por arquivo `.ini`**: Clique em **Baixar de .INI...** e selecione qualquer arquivo `.ini` com URLs.
+- **Download por URL direta ou Playlist**: Digite o link do vídeo ou playlist (ex: YouTube `https://www.youtube.com/playlist?list=...`) e clique em **Baixar URL**. Caso seja uma playlist, uma pasta com o nome da playlist será criada automaticamente e os vídeos serão baixados dentro dela!
+- **Download por arquivo `.ini`**: Clique em **Baixar de .INI...** e selecione qualquer arquivo `.ini` com URLs. Se as seções tiverem nomes personalizados, pastas correspondentes serão criadas para organizar os vídeos.
 - **Progresso em tempo real**: Exibe barra de progresso visual, porcentagem, total baixado e velocidade em KB/s ou MB/s.
 - **Botão de Cancelar**: Permite abortar o download em andamento de forma segura.
-- **Lista de Vídeos Baixados**: Lista todos os arquivos presentes na pasta `downloads/`. Um duplo clique ou seleção reproduz o vídeo.
+- **Visualizador Hierárquico de Pastas e Vídeos (TreeView)**: Exibe pastas de playlists (📁) e vídeos soltos ou internos (🎥). Um duplo clique em qualquer vídeo inicia a reprodução imediatamente no reprodutor integrado.
 - **Reprodutor de Vídeo Integrado**: Botões de ▶ Reproduzir, ⏸ Pausar e ⏹ Parar diretamente na janela.
 - **Abrir Pasta**: Abre a pasta de arquivos baixados diretamente no Windows Explorer.
 
@@ -107,39 +109,45 @@ O aplicativo pode ser executado diretamente pelo terminal para automações ou s
 
 #### A) Baixar a partir de um arquivo `.ini`:
 ```bash
-./build/VideoDownloader.exe -i urls_exemplo.ini
+./VideoDownloader.exe -i urls_exemplo.ini
 ```
 
-#### B) Baixar uma URL direta:
+#### B) Baixar uma Playlist (cria pasta com o nome da playlist):
 ```bash
-./build/VideoDownloader.exe -u "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+./VideoDownloader.exe -u "https://www.youtube.com/playlist?list=PLbzoR-pLrL6qucl8-lOnzvhFc2UM1tcZA"
+```
+
+#### C) Baixar uma URL direta de vídeo:
+```bash
+./VideoDownloader.exe -u "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
 ```
 Ou simplesmente passando a URL como argumento:
 ```bash
-./build/VideoDownloader.exe "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+./VideoDownloader.exe "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
 ```
 
-#### C) Definir pasta de saída personalizada:
+#### D) Definir pasta de saída personalizada:
 ```bash
-./build/VideoDownloader.exe -i urls_exemplo.ini -o "minha_pasta_de_videos"
+./VideoDownloader.exe -i urls_exemplo.ini -o "minha_pasta_de_videos"
 ```
 
-#### D) Exibir ajuda do terminal:
+#### E) Exibir ajuda do terminal:
 ```bash
-./build/VideoDownloader.exe --help
+./VideoDownloader.exe --help
 ```
 
 ---
 
 ## 5. Formato do Arquivo `.ini`
 
-O arquivo `.ini` pode conter seções livres e qualquer chave que represente uma URL, ou mesmo URLs diretas:
+O arquivo `.ini` pode conter seções livres e qualquer chave que represente uma URL, ou mesmo URLs diretas. Se a seção possuir um nome específico, os vídeos daquela seção serão salvos em uma subpasta com o mesmo nome:
 
 ```ini
 [videos]
-video1 = https://servidor.com/video1.mp4
-video2 = https://servidor.com/aula.mkv
+video1 = https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4
+video2 = https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4
 
-[colecao]
-url = https://servidor.com/filme.avi
+# Seção com nome customizado: cria subpasta downloads/Tutoriais/
+[Tutoriais]
+playlist1 = https://www.youtube.com/playlist?list=PLbzoR-pLrL6qucl8-lOnzvhFc2UM1tcZA
 ```

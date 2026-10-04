@@ -49,7 +49,7 @@ void printUsage(const char* progName) {
               << "========================================================\n";
 }
 
-int runCli(const std::vector<std::string>& urls, const std::string& outputFolder) {
+int runCli(const std::vector<IniEntry>& entries, const std::string& outputFolder) {
     fs::create_directories(outputFolder);
     signal(SIGINT, signalHandler);
 
@@ -57,50 +57,65 @@ int runCli(const std::vector<std::string>& urls, const std::string& outputFolder
     Downloader downloader;
     g_currentDownloader = &downloader;
 
-    int total = static_cast<int>(urls.size());
+    int total = static_cast<int>(entries.size());
     int successCount = 0;
 
-    std::cout << "\nIniciando download de " << total << " video(s) para '" << outputFolder << "'...\n\n";
+    std::cout << "\nIniciando processamento de " << total << " item(ns) para '" << outputFolder << "'...\n\n";
 
-    for (size_t i = 0; i < urls.size(); ++i) {
+    for (size_t i = 0; i < entries.size(); ++i) {
         if (downloader.isCancelled()) {
             std::cout << "\nOperacao cancelada.\n";
             break;
         }
 
-        const std::string& url = urls[i];
-        std::string filename = Downloader::getFilenameFromUrl(url);
-        std::string destPath = outputFolder + "/" + filename;
+        const auto& entry = entries[i];
+        std::string targetFolder = outputFolder;
+        if (!entry.customFolder.empty()) {
+            targetFolder += "/" + Downloader::sanitizeFilename(entry.customFolder);
+            fs::create_directories(targetFolder);
+        }
 
-        std::cout << "[" << (i + 1) << "/" << total << "] Baixando: " << filename << "\n";
-        std::cout << "URL: " << url << "\n";
+        std::cout << "[" << (i + 1) << "/" << total << "] Processando: " << entry.url << "\n";
+        if (!entry.customFolder.empty()) {
+            std::cout << " -> Pasta de destino: " << targetFolder << "\n";
+        }
 
-        bool ok = downloader.download(
-            url,
-            destPath,
+        bool ok = downloader.downloadTarget(
+            entry.url,
+            targetFolder,
             [](const DownloadProgress& p) -> bool {
                 printCliProgressBar(p);
                 return true;
             },
             [](const std::string& status) {
-                // Notificacoes de status
+                std::cout << " -> " << status << "\n";
             }
         );
 
         std::cout << "\n";
         if (ok) {
-            std::cout << "=> [SUCESSO] Salvo em: " << destPath << "\n\n";
+            std::cout << "=> [SUCESSO] Concluido com sucesso!\n\n";
             successCount++;
         } else {
-            std::cout << "=> [FALHA] Nao foi possivel baixar o video.\n\n";
+            std::cout << "=> [FALHA] Nao foi possivel concluir o download.\n\n";
         }
     }
 
     g_currentDownloader = nullptr;
     Downloader::cleanupNetwork();
 
-    std::cout << "Resumo: " << successCount << " de " << total << " download(s) concluidos com sucesso.\n";
+    std::cout << "Resumo: " << successCount << " de " << total << " operacao(oes) concluidas com sucesso.\n";
     return (successCount == total) ? 0 : 1;
+}
+
+int runCli(const std::vector<std::string>& urls, const std::string& outputFolder) {
+    std::vector<IniEntry> entries;
+    for (const auto& u : urls) {
+        IniEntry e;
+        e.url = u;
+        entries.push_back(e);
+    }
+    return runCli(entries, outputFolder);
 }
 
 int main(int argc, char* argv[]) {
@@ -159,12 +174,12 @@ int main(int argc, char* argv[]) {
             std::cerr << "Erro: Nao foi possivel abrir o arquivo INI: " << iniFile << "\n";
             return 1;
         }
-        std::vector<std::string> urls = parser.getUrls();
-        if (urls.empty()) {
+        std::vector<IniEntry> entries = parser.getEntries();
+        if (entries.empty()) {
             std::cerr << "Aviso: Nenhuma URL encontrada no arquivo " << iniFile << "\n";
             return 1;
         }
-        return runCli(urls, outputDir);
+        return runCli(entries, outputDir);
     }
 
     // Modo Terminal com URL direta

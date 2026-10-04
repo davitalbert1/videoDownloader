@@ -1,18 +1,18 @@
-#!/usr/bin/env bash
-
-# ==============================================================================
 # Script de automação de build para o VideoDownloader (MinGW-w64 + CMake)
-# ==============================================================================
 
 set -e
 
 BUILD_DIR="build"
+DLL_DIR="dll"
+
+# Diretório raiz do projeto (onde o VideoDownloader.exe será gerado, fora do build)
+PROJECT_DIR="$(pwd)"
 
 # Função para exibir ajuda
 show_help() {
     echo "Uso: ./build.sh [OPCOES]"
     echo ""
-    echo "Opcoes:"
+    echo "Opções:"
     echo "  clean      Limpa a pasta de build antes de compilar"
     echo "  --clean    Limpa a pasta de build antes de compilar"
     echo "  -c         Limpa a pasta de build antes de compilar"
@@ -35,7 +35,7 @@ for arg in "$@"; do
             exit 0
             ;;
         *)
-            echo "Opcao desconhecida: $arg"
+            echo "Opção desconhecida: $arg"
             show_help
             exit 1
             ;;
@@ -43,9 +43,9 @@ for arg in "$@"; do
 done
 
 if [ "$DO_CLEAN" = true ]; then
-    echo "==> Limpando diretorio de build '$BUILD_DIR'..."
+    echo "==> Limpando diretório de build '$BUILD_DIR'..."
     rm -rf "$BUILD_DIR"
-    echo "==> Diretorio de build limpo com sucesso."
+    echo "==> Diretório de build limpo com sucesso."
 fi
 
 # Detectar ambiente e garantir MinGW64 no PATH caso esteja no MSYS2
@@ -55,8 +55,10 @@ elif [ -d "D:/msys64/mingw64/bin" ]; then
     export PATH="D:/msys64/mingw64/bin:$PATH"
 fi
 
-# Criar pasta de build se não existir
+# Criar pastas necessárias
 mkdir -p "$BUILD_DIR"
+mkdir -p "$PROJECT_DIR/$DLL_DIR"
+
 cd "$BUILD_DIR"
 
 echo "==> Configurando CMake (MinGW Makefiles)..."
@@ -71,9 +73,11 @@ fi
 echo "==> Compilando o projeto..."
 cmake --build . --config Release -j$(nproc 2>/dev/null || echo 4)
 
-# Copiar DLLs do MinGW necessárias para a pasta do executável (se existirem no PATH do MinGW)
-echo "==> Verificando dependencias de DLLs..."
+# Copiar DLLs do MinGW necessárias para a pasta dll
+echo "==> Verificando dependências de DLLs..."
+
 MINGW_BIN=""
+
 if [ -d "/d/msys64/mingw64/bin" ]; then
     MINGW_BIN="/d/msys64/mingw64/bin"
 elif [ -d "D:/msys64/mingw64/bin" ]; then
@@ -81,21 +85,46 @@ elif [ -d "D:/msys64/mingw64/bin" ]; then
 fi
 
 if [ -n "$MINGW_BIN" ]; then
-    for dll in libcurl-4.dll libbrotlidec.dll libbrotlicommon.dll libcrypto-3-x64.dll \
-               libssl-3-x64.dll libidn2-0.dll libpsl-5.dll libssh2-1.dll libnghttp2-14.dll \
-               libnghttp3-9.dll libngtcp2-16.dll libngtcp2_crypto_ossl-0.dll libzstd.dll \
-               zlib1.dll libiconv-2.dll libintl-8.dll libunistring-5.dll; do
-        if [ -f "$MINGW_BIN/$dll" ] && [ ! -f "$dll" ]; then
-            cp "$MINGW_BIN/$dll" . 2>/dev/null || true
+    for dll in \
+        libcurl-4.dll \
+        libbrotlidec.dll \
+        libbrotlicommon.dll \
+        libcrypto-3-x64.dll \
+        libssl-3-x64.dll \
+        libidn2-0.dll \
+        libpsl-5.dll \
+        libssh2-1.dll \
+        libnghttp2-14.dll \
+        libnghttp3-9.dll \
+        libngtcp2-16.dll \
+        libngtcp2_crypto_ossl-0.dll \
+        libzstd.dll \
+        zlib1.dll \
+        libiconv-2.dll \
+        libintl-8.dll \
+        libunistring-5.dll \
+        libwinpthread-1.dll
+    do
+        if [ -f "$MINGW_BIN/$dll" ]; then
+            cp "$MINGW_BIN/$dll" "$PROJECT_DIR/$DLL_DIR/" 2>/dev/null || true
         fi
     done
 fi
 
-# Garantir pasta de downloads no diretório do executável
-mkdir -p downloads
+# Garantir yt-dlp.exe na raiz do projeto
+if [ ! -f "$PROJECT_DIR/yt-dlp.exe" ] && \
+   [ -n "$MINGW_BIN" ] && \
+   [ -f "$MINGW_BIN/yt-dlp.exe" ]; then
+    cp "$MINGW_BIN/yt-dlp.exe" "$PROJECT_DIR/" 2>/dev/null || true
+fi
+
+# Garantir pasta de downloads na raiz do projeto
+mkdir -p "$PROJECT_DIR/downloads"
 
 echo ""
 echo "=========================================================="
-echo " [SUCESSO] Build concluido com sucesso!"
-echo " Executavel gerado em: $BUILD_DIR/VideoDownloader.exe"
+echo " [SUCESSO] Build concluído com sucesso!"
+echo " Executável: $PROJECT_DIR/VideoDownloader.exe"
+echo " DLLs:       $PROJECT_DIR/$DLL_DIR/"
+echo " Downloads:  $PROJECT_DIR/downloads/"
 echo "=========================================================="

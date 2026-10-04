@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <cctype>
+#include <functional>
 
 namespace fs = std::filesystem;
 
@@ -19,7 +20,7 @@ enum ControlIDs {
     IDC_PROGRESS_BAR,
     IDC_LABEL_STATUS,
     IDC_LABEL_SPEED,
-    IDC_LIST_VIDEOS,
+    IDC_TREE_VIDEOS,
     IDC_VIDEO_PANEL,
     IDC_BTN_PLAY,
     IDC_BTN_PAUSE,
@@ -44,7 +45,7 @@ MainWindow::MainWindow()
       m_hProgressBar(nullptr),
       m_hLabelStatus(nullptr),
       m_hLabelSpeed(nullptr),
-      m_hListVideos(nullptr),
+      m_hTreeVideos(nullptr),
       m_hVideoPanel(nullptr),
       m_hBtnPlay(nullptr),
       m_hBtnPause(nullptr),
@@ -177,13 +178,13 @@ void MainWindow::createControls(HWND hWnd) {
                                  WS_CHILD | WS_VISIBLE | SS_RIGHT,
                                  630, 75, 355, 20, hWnd, (HMENU)IDC_LABEL_SPEED, m_hInstance, NULL);
 
-    // Coluna Esquerda: Lista de Vídeos Baixados
-    CreateWindowW(L"STATIC", L"Vídeos Baixados na pasta 'downloads':", WS_CHILD | WS_VISIBLE,
+    // Coluna Esquerda: Lista de Vídeos e Playlists Baixadas
+    CreateWindowW(L"STATIC", L"Pastas / Playlists e Vídeos ('downloads'):", WS_CHILD | WS_VISIBLE,
                   20, 105, 300, 20, hWnd, NULL, m_hInstance, NULL);
 
-    m_hListVideos = CreateWindowExW(WS_EX_CLIENTEDGE, L"LISTBOX", L"",
-                                   WS_CHILD | WS_VISIBLE | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL,
-                                   20, 130, 280, 460, hWnd, (HMENU)IDC_LIST_VIDEOS, m_hInstance, NULL);
+    m_hTreeVideos = CreateWindowExW(WS_EX_CLIENTEDGE, WC_TREEVIEWW, L"",
+                                    WS_CHILD | WS_VISIBLE | TVS_HASLINES | TVS_LINESATROOT | TVS_HASBUTTONS | TVS_SHOWSELALWAYS,
+                                    20, 130, 280, 460, hWnd, (HMENU)IDC_TREE_VIDEOS, m_hInstance, NULL);
 
     m_hBtnRefreshList = CreateWindowW(L"BUTTON", L"Atualizar Lista",
                                      WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
@@ -217,7 +218,7 @@ void MainWindow::createControls(HWND hWnd) {
     // Aplicar fonte a todos os controles
     HWND controls[] = {
         m_hEditUrl, m_hBtnDownloadUrl, m_hBtnDownloadIni, m_hBtnCancel,
-        m_hLabelStatus, m_hLabelSpeed, m_hListVideos,
+        m_hLabelStatus, m_hLabelSpeed, m_hTreeVideos,
         m_hBtnPlay, m_hBtnPause, m_hBtnStop, m_hBtnRefreshList, m_hBtnOpenFolder
     };
     for (HWND c : controls) {
@@ -261,7 +262,7 @@ void MainWindow::updateLayout(int width, int height) {
     if (contentH < 150) contentH = 150;
 
     int listW = 260;
-    MoveWindow(m_hListVideos, 20, contentY, listW, contentH, TRUE);
+    MoveWindow(m_hTreeVideos, 20, contentY, listW, contentH, TRUE);
 
     int videoX = 20 + listW + 15;
     int videoW = width - videoX - 20;
@@ -283,49 +284,94 @@ void MainWindow::updateLayout(int width, int height) {
     }
 }
 
+namespace {
+    bool isVideoFile(const fs::path& p) {
+        std::string ext = p.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        return (ext == ".mp4" || ext == ".avi" || ext == ".wmv" ||
+                ext == ".mov" || ext == ".mkv" || ext == ".webm" ||
+                ext == ".mpg" || ext == ".mpeg" || ext == ".flv" || ext == ".ts");
+    }
+
+    std::wstring toWide(const std::string& str) {
+        if (str.empty()) return L"";
+        int len = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, NULL, 0);
+        std::wstring w(len, 0);
+        MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, &w[0], len);
+        if (!w.empty() && w.back() == L'\0') w.pop_back();
+        return w;
+    }
+}
+
 void MainWindow::refreshDownloadedList() {
-    SendMessageW(m_hListVideos, LB_RESETCONTENT, 0, 0);
-    m_videoFilePaths.clear();
+    TreeView_DeleteAllItems(m_hTreeVideos);
+    m_treeItemPaths.clear();
 
     if (!fs::exists(m_downloadsDir)) {
         fs::create_directories(m_downloadsDir);
     }
 
     try {
-        for (const auto& entry : fs::directory_iterator(m_downloadsDir)) {
-            if (entry.is_regular_file()) {
-                std::string ext = entry.path().extension().string();
-                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        // Função recursiva para varrer pastas e subpastas de qualquer nível
+        std::function<void(const fs::path&, HTREEITEM)> populateTree;
+        populateTree = [&](const fs::path& currentDir, HTREEITEM parentItem) {
+            for (const auto& entry : fs::directory_iterator(currentDir)) {
+                if (entry.is_directory()) {
+                    std::string dirName = entry.path().filename().string();
+                    std::wstring wDirName = L"📁 " + toWide(dirName);
 
-                // Extensões de vídeo suportadas
-                if (ext == ".mp4" || ext == ".avi" || ext == ".wmv" || 
-                    ext == ".mov" || ext == ".mkv" || ext == ".webm" || 
-                    ext == ".mpg" || ext == ".mpeg" || ext == ".flv") {
-                    
+                    TVINSERTSTRUCTW tvisDir = {};
+                    tvisDir.hParent = parentItem;
+                    tvisDir.hInsertAfter = TVI_LAST;
+                    tvisDir.item.mask = TVIF_TEXT | TVIF_PARAM;
+                    tvisDir.item.pszText = const_cast<wchar_t*>(wDirName.c_str());
+                    tvisDir.item.lParam = (LPARAM)-1;
+
+                    HTREEITEM hSubDir = TreeView_InsertItem(m_hTreeVideos, &tvisDir);
+                    populateTree(entry.path(), hSubDir);
+                    TreeView_Expand(m_hTreeVideos, hSubDir, TVE_EXPAND);
+                } else if (entry.is_regular_file() && isVideoFile(entry.path())) {
                     std::string filename = entry.path().filename().string();
-                    m_videoFilePaths.push_back(entry.path().string());
+                    std::wstring wName = L"🎥 " + toWide(filename);
 
-                    // Converter para wstring para o ListBox
-                    int len = MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, NULL, 0);
-                    std::wstring wFilename(len, 0);
-                    MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, &wFilename[0], len);
+                    m_treeItemPaths.push_back(entry.path().string());
+                    LPARAM itemIndex = static_cast<LPARAM>(m_treeItemPaths.size() - 1);
 
-                    SendMessageW(m_hListVideos, LB_ADDSTRING, 0, (LPARAM)wFilename.c_str());
+                    TVINSERTSTRUCTW tvisFile = {};
+                    tvisFile.hParent = parentItem;
+                    tvisFile.hInsertAfter = TVI_LAST;
+                    tvisFile.item.mask = TVIF_TEXT | TVIF_PARAM;
+                    tvisFile.item.pszText = const_cast<wchar_t*>(wName.c_str());
+                    tvisFile.item.lParam = itemIndex;
+
+                    TreeView_InsertItem(m_hTreeVideos, &tvisFile);
                 }
             }
-        }
+        };
+
+        populateTree(m_downloadsDir, TVI_ROOT);
     } catch (...) {}
 }
 
 void MainWindow::playSelectedVideo() {
-    int sel = static_cast<int>(SendMessageW(m_hListVideos, LB_GETCURSEL, 0, 0));
-    if (sel >= 0 && sel < static_cast<int>(m_videoFilePaths.size())) {
-        std::string videoPath = m_videoFilePaths[sel];
-        if (m_videoPlayer->open(videoPath, m_hVideoPanel)) {
-            m_videoPlayer->play();
-        } else {
-            MessageBoxW(m_hWnd, L"Não foi possível abrir o vídeo selecionado no player DirectShow.",
-                        L"Aviso", MB_ICONWARNING);
+    HTREEITEM hSelected = TreeView_GetSelection(m_hTreeVideos);
+    if (!hSelected) return;
+
+    TVITEMW item = {};
+    item.mask = TVIF_PARAM;
+    item.hItem = hSelected;
+    if (TreeView_GetItem(m_hTreeVideos, &item)) {
+        if (item.lParam >= 0 && item.lParam < static_cast<LPARAM>(m_treeItemPaths.size())) {
+            std::string videoPath = m_treeItemPaths[static_cast<size_t>(item.lParam)];
+            if (m_videoPlayer->open(videoPath, m_hVideoPanel)) {
+                m_videoPlayer->play();
+                std::string fn = fs::path(videoPath).filename().string();
+                std::wstring msg = L"Reproduzindo: " + toWide(fn);
+                SetWindowTextW(m_hLabelStatus, msg.c_str());
+            } else {
+                MessageBoxW(m_hWnd, L"Não foi possível abrir o vídeo selecionado no player DirectShow.",
+                            L"Aviso", MB_ICONWARNING);
+            }
         }
     }
 }
@@ -361,10 +407,7 @@ void MainWindow::startDownloadUrl() {
     }
 
     m_downloadThread = std::thread([this, url]() {
-        std::string filename = Downloader::getFilenameFromUrl(url);
-        std::string destPath = m_downloadsDir + "/" + filename;
-
-        bool success = m_downloader->download(url, destPath,
+        bool success = m_downloader->downloadTarget(url, m_downloadsDir,
             [this](const DownloadProgress& p) -> bool {
                 auto* payload = new ProgressPayload{
                     p.percentage,
@@ -408,8 +451,8 @@ void MainWindow::startDownloadIni() {
             return;
         }
 
-        std::vector<std::string> urls = parser.getUrls();
-        if (urls.empty()) {
+        std::vector<IniEntry> entries = parser.getEntries();
+        if (entries.empty()) {
             MessageBoxW(m_hWnd, L"Nenhuma URL encontrada no arquivo .ini.", L"Aviso", MB_ICONINFORMATION);
             return;
         }
@@ -423,23 +466,26 @@ void MainWindow::startDownloadIni() {
             m_downloadThread.join();
         }
 
-        m_downloadThread = std::thread([this, urls]() {
-            int total = static_cast<int>(urls.size());
+        m_downloadThread = std::thread([this, entries]() {
+            int total = static_cast<int>(entries.size());
             int completed = 0;
 
-            for (size_t i = 0; i < urls.size(); ++i) {
+            for (size_t i = 0; i < entries.size(); ++i) {
                 if (m_downloader->isCancelled()) break;
 
-                const std::string& url = urls[i];
-                std::string filename = Downloader::getFilenameFromUrl(url);
-                std::string destPath = m_downloadsDir + "/" + filename;
+                const auto& entry = entries[i];
+                std::string targetFolder = m_downloadsDir;
+                if (!entry.customFolder.empty()) {
+                    targetFolder += "/" + Downloader::sanitizeFilename(entry.customFolder);
+                    fs::create_directories(targetFolder);
+                }
 
                 std::ostringstream ss;
-                ss << "[" << (i + 1) << "/" << total << "] Baixando: " << filename;
+                ss << "[" << (i + 1) << "/" << total << "] Processando URL: " << entry.url;
                 auto* initialMsg = new std::string(ss.str());
                 PostMessageW(m_hWnd, WM_APP_DOWNLOAD_LOG, 0, (LPARAM)initialMsg);
 
-                bool ok = m_downloader->download(url, destPath,
+                bool ok = m_downloader->downloadTarget(entry.url, targetFolder,
                     [this, i, total](const DownloadProgress& p) -> bool {
                         std::ostringstream ssStatus;
                         ssStatus << "[" << (i + 1) << "/" << total << "] " << p.downloadedFormatted << " / " << p.totalFormatted;
@@ -451,7 +497,10 @@ void MainWindow::startDownloadIni() {
                         PostMessageW(m_hWnd, WM_APP_DOWNLOAD_PROGRESS, 0, (LPARAM)payload);
                         return !m_downloader->isCancelled();
                     },
-                    nullptr
+                    [this](const std::string& msg) {
+                        auto* logMsg = new std::string(msg);
+                        PostMessageW(m_hWnd, WM_APP_DOWNLOAD_LOG, 0, (LPARAM)logMsg);
+                    }
                 );
 
                 if (ok) completed++;
@@ -527,12 +576,16 @@ LRESULT MainWindow::handleMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
         case IDC_BTN_OPEN_FOLDER:
             openContainingFolder();
             break;
+        }
+        return 0;
+    }
 
-        case IDC_LIST_VIDEOS:
-            if (wmEvent == LBN_DBLCLK) {
+    case WM_NOTIFY: {
+        LPNMHDR pnmh = reinterpret_cast<LPNMHDR>(lParam);
+        if (pnmh->idFrom == IDC_TREE_VIDEOS) {
+            if (pnmh->code == NM_DBLCLK) {
                 playSelectedVideo();
             }
-            break;
         }
         return 0;
     }

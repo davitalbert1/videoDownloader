@@ -30,6 +30,15 @@ set(HEADERS
 # Executável do projeto
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 
+# Gerar o executável FORA da pasta de build (na raiz do projeto)
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_CURRENT_SOURCE_DIR}
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_CURRENT_SOURCE_DIR}
+    RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_CURRENT_SOURCE_DIR}
+    RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 # Flags para MinGW (estático para libgcc e libstdc++)
 if(MINGW)
     target_link_options(${PROJECT_NAME} PRIVATE -static-libgcc -static-libstdc++)

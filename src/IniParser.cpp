@@ -18,6 +18,7 @@ std::string IniParser::trim(const std::string& str) {
 bool IniParser::loadFromFile(const std::string& filepath) {
     m_data.clear();
     m_urls.clear();
+    m_entries.clear();
 
     std::ifstream file(filepath);
     if (!file.is_open()) return false;
@@ -56,11 +57,28 @@ bool IniParser::loadFromFile(const std::string& filepath) {
             if (val.rfind("http://", 0) == 0 || val.rfind("https://", 0) == 0 ||
                 key.find("url") != std::string::npos || key.find("video") != std::string::npos) {
                 m_urls.push_back(val);
+                IniEntry entry;
+                entry.section = currentSection;
+                entry.key = key;
+                entry.url = val;
+                // Se a seção não for default nem videos, usar como pasta sugerida
+                if (currentSection != "default" && currentSection != "videos" && currentSection != "urls") {
+                    entry.customFolder = currentSection;
+                }
+                m_entries.push_back(entry);
             }
         } else {
             // Linha sem '=', pode ser uma URL direta listada linha a linha
             if (trimmed.rfind("http://", 0) == 0 || trimmed.rfind("https://", 0) == 0) {
                 m_urls.push_back(trimmed);
+                IniEntry entry;
+                entry.section = currentSection;
+                entry.key = "url";
+                entry.url = trimmed;
+                if (currentSection != "default" && currentSection != "videos" && currentSection != "urls") {
+                    entry.customFolder = currentSection;
+                }
+                m_entries.push_back(entry);
             }
         }
     }
@@ -79,4 +97,8 @@ std::string IniParser::get(const std::string& section, const std::string& key, c
         if (keyIt != secIt->second.end()) return keyIt->second;
     }
     return defaultValue;
+}
+
+std::vector<IniEntry> IniParser::getEntries() const {
+    return m_entries;
 }

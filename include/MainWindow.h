@@ -1,4 +1,6 @@
+#ifndef MAIN_WINDOW_H
 #define MAIN_WINDOW_H
+
 #include <windows.h>
 #include <commctrl.h>
 #include <string>
@@ -46,7 +48,7 @@ private:
     HWND m_hProgressBar;
     HWND m_hLabelStatus;
     HWND m_hLabelSpeed;
-    HWND m_hListVideos;
+    HWND m_hTreeVideos;      // TreeView hierárquico com pastas/playlists e vídeos
     HWND m_hVideoPanel;
     HWND m_hBtnPlay;
     HWND m_hBtnPause;
@@ -66,4 +68,6 @@ private:
 
     std::string m_downloadsDir;
     std::vector<std::string> m_videoFilePaths;
+    std::vector<std::string> m_treeItemPaths; // Mapeamento item -> caminho absoluto/relativo
 };
+#endif // MAIN_WINDOW_H

@@ -178,3 +178,22 @@ git remote -v
 ```bash
 git --version
 ```
+
+## Baixar itens remotos
+
+```bash
+git fetch origin
+git merge origin/main --allow-unrelated-histories
+```
+
+aperte 'esc' ao aparecer mensagem de commit message (vim), depois digite:
+
+```bash
+:wq
+```
+
+após isso, digite:
+
+```bash
+git branch --set-upstream-to=origin/main master
+```

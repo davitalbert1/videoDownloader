@@ -1,1 +1,6 @@
 build/
+# Artefatos de build gerados na raiz do projeto (fora da pasta build)
+/VideoDownloader.exe
+/*.dll
+/downloads/
+/dll/
